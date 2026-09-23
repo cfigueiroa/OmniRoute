@@ -151,13 +151,7 @@ function applySessionAffinityLegacyFallback(settings: Record<string, unknown>): 
 
 export async function getSettings() {
   const db = getDbInstance();
-  let rows: unknown[] = [];
-  try {
-    rows = db.prepare("SELECT key, value FROM key_value WHERE namespace = 'settings'").all();
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.warn(`[DB] Failed to read settings; using defaults: ${message}`);
-  }
+  const rows = db.prepare("SELECT key, value FROM key_value WHERE namespace = 'settings'").all();
   const settings: Record<string, unknown> = {
     cloudEnabled: true,
     tailscaleEnabled: false,

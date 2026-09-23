@@ -1,1 +1,1 @@
-- fix(db): degrade getSettings() to defaults instead of crashing the Home dashboard when the key_value table is corrupted (#14060)
+- fix(dashboard): Home degrades to default settings instead of returning 500 when the SQLite key_value table is corrupted; getSettings() keeps failing closed so auth gates still require login (#14060)
