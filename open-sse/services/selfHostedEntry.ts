@@ -21,8 +21,9 @@
  *    comparison (`timingSafeCompare`), never `===` (#14485, CWE-208).
  *  - Every request through the unified `/v1/chat/completions` entry — including
  *    this self-hosted divert — is gated by `enforceApiKeyPolicy()` (schedule,
- *    rate limit, quota, allowedModels) before it ever reaches this module
- *    (#14485). This module's own optional shared-key check is a *separate*,
+ *    rate limit, quota, allowedModels) exactly once: the route runs it right
+ *    before this divert only when `isSelfHostedEntryConfigured()`, and the cloud
+ *    path runs it inside handleChat() (#14485). This module's own optional shared-key check is a *separate*,
  *    additive gate for the self-hosted config itself, not a substitute for it.
  */
 
@@ -404,18 +405,27 @@ export async function completeViaSelfHostedRouter(
  * failed to load/parse, returns a 500 error instead — a misconfigured entry
  * must never silently fall through to cloud routing.
  */
-export async function handleSelfHostedCompletions(
-  request: Request,
-  body: Record<string, unknown> | null,
-  options: SelfHostedOptions = {}
-): Promise<Response | null> {
-  const isConfigured = Boolean(
+/**
+ * True when a self-hosted provider config is present (inline, file, or env).
+ * `handleSelfHostedCompletions()` answers EVERY request once this is true, so
+ * the route uses it to scope work that must run only on the divert path (e.g.
+ * the #14485 key-policy gate, which the cloud path runs inside handleChat()).
+ */
+export function isSelfHostedEntryConfigured(options: SelfHostedOptions = {}): boolean {
+  return Boolean(
     options.providers ??
     options.providersFile ??
     process.env[CONFIG_ENV] ??
     process.env[CONFIG_FILE_ENV]
   );
-  if (!isConfigured) return null;
+}
+
+export async function handleSelfHostedCompletions(
+  request: Request,
+  body: Record<string, unknown> | null,
+  options: SelfHostedOptions = {}
+): Promise<Response | null> {
+  if (!isSelfHostedEntryConfigured(options)) return null;
 
   const runtime = await loadSelfHostedRuntime(options);
   if (!runtime) {

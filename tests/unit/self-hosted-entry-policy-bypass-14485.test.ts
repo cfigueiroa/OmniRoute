@@ -164,6 +164,48 @@ test("#14485: an active key with no restrictions still reaches the self-hosted u
   assert.equal(upstreamCalls, before + 1, "the self-hosted upstream must have been called once");
 });
 
+test("#14485: a cloud request (no self-hosted config) runs the key policy ONCE, not twice", async () => {
+  // A key allowed exactly one request per minute. The cloud pipeline already
+  // enforces the policy inside handleChat(); if the route ALSO enforced it
+  // ahead of the (unconfigured) self-hosted divert, this single request would
+  // consume the window twice and be rejected with 429 by the second check.
+  const created = await apiKeysDb.createApiKey("One-per-minute Key 14485", "machine-14485-rl");
+  await apiKeysDb.updateApiKeyPermissions(created.id, {
+    rateLimits: [{ limit: 1, window: 60 }],
+  });
+
+  const savedConfig = process.env.OMNIROUTE_SELF_HOSTED_PROVIDERS;
+  delete process.env.OMNIROUTE_SELF_HOSTED_PROVIDERS;
+  const before = upstreamCalls;
+  try {
+    const request = new Request("http://localhost/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        Authorization: `Bearer ${created.key}`,
+      },
+      body: JSON.stringify({
+        model: "openai/gpt-4.1",
+        messages: [{ role: "user", content: "hi" }],
+      }),
+    });
+
+    const response = await chatRoute.POST(request);
+    const text = await response.text();
+
+    assert.notEqual(
+      response.status,
+      429,
+      "a single cloud request must not trip a 1-req/min limit — the key policy ran twice " +
+        `(route pre-divert + handleChat): ${text.slice(0, 200)}`
+    );
+    assert.doesNotMatch(text, /Request limit exceeded/);
+    assert.equal(upstreamCalls, before, "a cloud request must never reach the self-hosted stub");
+  } finally {
+    process.env.OMNIROUTE_SELF_HOSTED_PROVIDERS = savedConfig;
+  }
+});
+
 test("#14485: the shared self-hosted API key is compared with the constant-time helper, not `!==`", async () => {
   const source = fs.readFileSync(
     new URL("../../open-sse/services/selfHostedEntry.ts", import.meta.url),

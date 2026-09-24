@@ -5,7 +5,10 @@ import { handleChat } from "@/sse/handlers/chat";
 import { generateRequestId } from "@/shared/utils/requestId";
 import { resolveIncomingCorrelationId } from "@/shared/utils/correlationPreserve.ts";
 import { errorResponse } from "@omniroute/open-sse/utils/error.ts";
-import { handleSelfHostedCompletions } from "@omniroute/open-sse/services/selfHostedEntry.ts";
+import {
+  handleSelfHostedCompletions,
+  isSelfHostedEntryConfigured,
+} from "@omniroute/open-sse/services/selfHostedEntry.ts";
 import { initTranslators } from "@omniroute/open-sse/translator/index.ts";
 import { createInjectionGuard } from "@/middleware/promptInjectionGuard";
 import { acceptHeaderForcesStream } from "@omniroute/open-sse/utils/aiSdkCompat.ts";
@@ -172,18 +175,23 @@ export async function POST(request) {
           // the normal cloud pipeline (enforceApiKeyPolicy, called deep inside
           // handleChat() on that path) — otherwise a disabled/rate-limited/
           // schedule-restricted OmniRoute API key reaches the self-hosted upstream
-          // unchecked. Run it before the divert so both paths share one gate.
-          const keyPolicy = await enforceApiKeyPolicy(
-            request,
-            typeof parsedBody.model === "string" ? parsedBody.model : null
-          );
-          if (keyPolicy.rejection) {
-            return finishAdmission(keyPolicy.rejection);
-          }
+          // unchecked. Run it ONLY when the divert is configured (it then answers
+          // every request): the cloud path already runs it once in handleChat(),
+          // and a second run would consume the rate-limit window twice, apply
+          // throttleDelayMs twice and check allowedModels before alias resolution.
+          if (isSelfHostedEntryConfigured()) {
+            const keyPolicy = await enforceApiKeyPolicy(
+              request,
+              typeof parsedBody.model === "string" ? parsedBody.model : null
+            );
+            if (keyPolicy.rejection) {
+              return finishAdmission(keyPolicy.rejection);
+            }
 
-          const selfHostedResponse = await handleSelfHostedCompletions(request, parsedBody);
-          if (selfHostedResponse) {
-            return finishAdmission(selfHostedResponse);
+            const selfHostedResponse = await handleSelfHostedCompletions(request, parsedBody);
+            if (selfHostedResponse) {
+              return finishAdmission(selfHostedResponse);
+            }
           }
 
           try {
