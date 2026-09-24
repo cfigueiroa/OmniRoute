@@ -324,7 +324,7 @@ export async function removeDNSEntry(
  * edit itself already succeeded).
  */
 export function flushWindowsDnsCache(): void {
-  if (!IS_WIN) return;
+  if (!isWin32()) return;
   try {
     execFileSync("ipconfig", ["/flushdns"], { stdio: "ignore", windowsHide: true, timeout: 5000 });
   } catch {
