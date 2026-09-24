@@ -1,18 +1,19 @@
 /**
  * opencodeParkResume.ts — park-and-resume after repeated transient 429s.
  *
+ * Leaf module: zero imports outside the executors layer
+ * (sleepAbortable only — same pattern as opencodeRateLimited.ts).
  * Reads the pool-strain marker written by the pool watcher (read-only,
  * fail-closed) and exposes the park decision helpers for the opencode loop.
- * Only internal import outside the executors layer is resolveDataDir()
- * (#14487 — the default marker path moved off the shared, world-writable
- * /tmp root; the file is still trusted only after an ownership/mode check).
+ * The watcher (#13924) writes the marker at the well-known default
+ * /tmp/opencode-pool-strain.json, so the file is trusted only after an
+ * ownership/mode check (#14487 — any local user can pre-create a file there).
  */
 
 import { sleepAbortable } from "./opencodeTransientFailure.ts";
 import { isProxyAvoided, proxyEgressKey, proxySetAsideSeq } from "../utils/proxyRefusalMemory.ts";
 import { maskAccountId, type RotatableAccount } from "./accountRotation.ts";
 import { runWithProxyContext } from "../utils/proxyFetch.ts";
-import { resolveDataDir } from "@/lib/dataPaths";
 import type { ExecuteInput, ExecutorExecuteResult } from "./base.ts";
 
 /** Consecutive transient 429s before a request parks. */
@@ -33,17 +34,18 @@ export interface PoolStrainMarker {
   ttlLeftMs: number;
 }
 
+/** Default marker path — where the external pool watcher (#13924) writes it. */
+export const DEFAULT_POOL_STRAIN_MARKER_PATH = "/tmp/opencode-pool-strain.json";
+
 /**
  * Env-overridable marker path (tests point it at a fixture; default is the
- * watcher path). The default lives under resolveDataDir() rather than the
- * shared, world-writable /tmp root (#14487) — any explicit override, and the
- * default itself, is still subject to the ownership/mode check in
- * defaultReadMarker() before its contents are trusted.
+ * watcher path). The default stays on /tmp so existing watchers keep working;
+ * the shared location is made safe by the ownership/mode/symlink check in
+ * defaultReadMarker() before any contents are trusted (#14487).
  */
 export function poolStrainMarkerPath(): string {
   const override = process.env.OPENCODE_POOL_STRAIN_MARKER_PATH?.trim();
-  if (override && override !== "") return override;
-  return `${resolveDataDir()}/opencode-pool-strain.json`;
+  return override && override !== "" ? override : DEFAULT_POOL_STRAIN_MARKER_PATH;
 }
 
 function clamp(n: number, lo: number, hi: number): number {
@@ -106,8 +108,13 @@ function isOwnerLockedDown(mode: number, uid: number | undefined): boolean {
 }
 
 async function defaultReadMarker(markerPath: string): Promise<{ mtimeMs: number; text: string }> {
-  const { stat, open } = await import("node:fs/promises");
-  const st = await stat(markerPath);
+  const { lstat, open } = await import("node:fs/promises");
+  // lstat, not stat: a symlink planted at the shared /tmp path is owned by
+  // whoever planted it, so it must never be followed into a file we own.
+  const st = await lstat(markerPath);
+  if (!st.isFile()) {
+    throw new Error("pool-strain marker is not a regular file");
+  }
   if (!isOwnerLockedDown(st.mode, st.uid)) {
     throw new Error("pool-strain marker is not owner-locked-down");
   }
