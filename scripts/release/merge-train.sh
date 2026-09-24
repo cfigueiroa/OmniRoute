@@ -137,7 +137,8 @@ if [ "$PLAN" = "1" ]; then
   echo "[merge-train] ${i}. ${VITEST}"
   i=$((i + 1))
   echo "[merge-train] ${i}. a red static gate is re-run on origin/${BASE}: same violations → reported"
-  echo "[merge-train]     as INHERITED and the train continues; any ADDED violation → exit 2"
+  echo "[merge-train]     as INHERITED and the train continues; any ADDED violation, more violation"
+  echo "[merge-train]     lines, or no recognisable violation line (fail-closed) → exit 2"
   i=$((i + 1))
   echo "[merge-train] ${i}. green → print --admin evidence per PR; red → exit 2 (bisect + eject)"
   echo "[merge-train] ${i}. teardown: git worktree remove --force (trap EXIT)"
@@ -213,16 +214,57 @@ INHERITED=()
 base_probe_ready() {
   [ -d "$BASE_WT" ] && return 0
   git -C "$ROOT" worktree add --detach "$BASE_WT" "origin/$BASE" --quiet || return 1
-  [ -e "$BASE_WT/node_modules" ] || ln -s "$ROOT/node_modules" "$BASE_WT/node_modules"
+  # Hard links (repo convention, AGENTS.md → Worktree isolation), not a symlink. If
+  # the link count limit bites ("Too many links"), drop the partial tree and fall back.
+  if [ ! -e "$BASE_WT/node_modules" ]; then
+    cp -al "$ROOT/node_modules" "$BASE_WT/node_modules" 2>/dev/null || {
+      rm -rf "$BASE_WT/node_modules"
+      ln -s "$ROOT/node_modules" "$BASE_WT/node_modules"
+    }
+  fi
   return 0
 }
 
-# A gate run's failure signature: the lines it marks as violations. The train's red
-# counts as INHERITED only when every violation line also appears on the base — a
-# train that ADDS one line owns a genuine red even though the gate was already
-# failing, and that is precisely the case a bare "it was red before" waves through.
+# A gate run's failure signature: the lines it marks as violations — the ✗/✖/×/FAIL/✘
+# markers the check:* scripts print, plus tsc's `error TS1234` diagnostics (the
+# typecheck gates, e.g. dashboard-typecheck, print no marker prefix at all). The
+# train's red counts as INHERITED only when every violation line also appears on the
+# base AND the train has no more violation lines than the base — a train that ADDS one
+# owns a genuine red even though the gate was already failing, and that is precisely
+# the case a bare "it was red before" waves through.
+GATE_ERROR_RE='^[[:space:]]*(✗|✖|×|FAIL|✘)|error TS[0-9]+'
 gate_violations() {
-  grep -aE '^[[:space:]]*(✗|✖|×|FAIL|✘)' "$1" 2>/dev/null | sed 's/^[[:space:]]*//' | sort -u
+  grep -aE "$GATE_ERROR_RE" "$1" 2>/dev/null | sed 's/^[[:space:]]*//' | sort -u
+}
+gate_violation_count() {
+  grep -acE "$GATE_ERROR_RE" "$1" 2>/dev/null || true
+}
+# classify_gate_red TRAIN_LOG BASE_LOG — called only when the gate is red on BOTH the
+# train and the base. Prints the verdict (first line) and returns 0 ONLY for INHERITED.
+# Fail-CLOSED: a red whose output yields no recognisable violation line cannot be
+# proven identical to the base, so it is UNCLASSIFIABLE and the train owns it (an empty
+# set on both sides used to read as "no added violations" — rework 2026-09-23).
+classify_gate_red() {
+  local added tc bc
+  if [ -z "$(gate_violations "$1")" ]; then
+    echo "UNCLASSIFIABLE"
+    echo "no violation line matched ${GATE_ERROR_RE} — cannot prove it matches the base"
+    return 1
+  fi
+  added="$(comm -23 <(gate_violations "$1") <(gate_violations "$2") || true)"
+  if [ -n "$added" ]; then
+    printf 'NEW\n%s\n' "$added"
+    return 1
+  fi
+  tc="$(gate_violation_count "$1")"
+  bc="$(gate_violation_count "$2")"
+  if [ "${tc:-0}" -gt "${bc:-0}" ]; then
+    echo "NEW"
+    echo "violation-line count grew on the train: ${bc:-0} → ${tc:-0}"
+    return 1
+  fi
+  echo "INHERITED"
+  return 0
 }
 
 run_gate() {
@@ -242,15 +284,14 @@ run_gate() {
     if (cd "$BASE_WT" && eval "$c") >>"$BASE_LOG" 2>&1; then
       echo "[merge-train] ✗ SUITE RED at: ${c} — GREEN on origin/${BASE}: the train owns this." >&2
     else
-      local added
-      added="$(comm -23 <(gate_violations "$LOG.gate") <(gate_violations "$BASE_LOG") || true)"
-      if [ -z "$added" ]; then
+      local verdict
+      if verdict="$(classify_gate_red "$LOG.gate" "$BASE_LOG")"; then
         echo "[merge-train] ⚠ INHERITED base-red (same violations on origin/${BASE}) — continuing: ${c}"
         INHERITED+=("$c")
         return 0
       fi
-      echo "[merge-train] ✗ SUITE RED at: ${c} — red on the base too, but the train ADDS:" >&2
-      printf '%s\n' "$added" | sed 's/^/[merge-train]     + /' >&2
+      echo "[merge-train] ✗ SUITE RED at: ${c} — red on the base too, but ${verdict%%$'\n'*}:" >&2
+      printf '%s\n' "$verdict" | tail -n +2 | sed 's/^/[merge-train]     + /' >&2
     fi
   fi
 

@@ -5,7 +5,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import { join, dirname } from "node:path";
@@ -203,4 +203,77 @@ test("--plan documents the inherited-red classification", async () => {
   assert.match(stdout, /re-run on origin\/release\/v9\.9\.9/);
   assert.match(stdout, /INHERITED and the train continues/);
   assert.match(stdout, /ADDED violation/);
+});
+
+// Behavioral guard for the INHERITED classifier (merge-batch rework 2026-09-23). The
+// first version only recognised ✗/✖/×/FAIL/✘ marker lines, so a gate that reports
+// errors any other way (tsc's `error TS2322` for dashboard-typecheck) produced an EMPTY
+// violation set on both sides — and an empty `comm` diff read as "inherited", even when
+// the train ADDED a brand-new type error. The classifier must fail CLOSED.
+function extractShellFunction(script: string, name: string): string {
+  const m = script.match(new RegExp(`^${name}\\(\\) \\{\\n[\\s\\S]*?\\n\\}\\n`, "m"));
+  assert.ok(m, `merge-train.sh must define ${name}()`);
+  return m[0];
+}
+
+async function classify(trainLog: string, baseLog: string) {
+  const script = await readFile(SCRIPT, "utf8");
+  const reLine = script.match(/^GATE_ERROR_RE=.*$/m)?.[0] ?? "";
+  const lib = [
+    reLine,
+    extractShellFunction(script, "gate_violations"),
+    extractShellFunction(script, "gate_violation_count"),
+    extractShellFunction(script, "classify_gate_red"),
+  ].join("\n");
+  const dir = await mkdtemp(join(tmpdir(), "merge-train-classify-"));
+  try {
+    await writeFile(join(dir, "lib.sh"), lib);
+    await writeFile(join(dir, "train.log"), trainLog);
+    await writeFile(join(dir, "base.log"), baseLog);
+    try {
+      const { stdout } = await pExecFile("bash", [
+        "-c",
+        'set -euo pipefail; source "$1/lib.sh"; classify_gate_red "$1/train.log" "$1/base.log"',
+        "_",
+        dir,
+      ]);
+      return { code: 0, stdout };
+    } catch (err) {
+      const e = err as { code?: number; stdout?: string };
+      return { code: e.code ?? -1, stdout: e.stdout ?? "" };
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+const TS_BASE =
+  "src/app/a.tsx(10,5): error TS2322: Type 'string' is not assignable to type 'number'.\n";
+
+test("a tsc-style gate red on the base that gains a NEW error on the train is NOT inherited", async () => {
+  const train = TS_BASE + "src/app/b.tsx(3,1): error TS2339: Property 'x' does not exist.\n";
+  const { code, stdout } = await classify(train, TS_BASE);
+  assert.notEqual(code, 0, `train added a TS error but was forgiven: ${stdout}`);
+  assert.doesNotMatch(stdout, /^INHERITED/);
+  assert.match(stdout, /error TS2339/);
+});
+
+test("identical tsc errors on base and train are still classified INHERITED", async () => {
+  const { code, stdout } = await classify(TS_BASE, TS_BASE);
+  assert.equal(code, 0);
+  assert.match(stdout, /^INHERITED/);
+});
+
+test("a red gate with no recognisable violation line is UNCLASSIFIABLE, never inherited", async () => {
+  const noise = "npm ERR! code ELIFECYCLE\nnpm ERR! errno 1\n";
+  const { code, stdout } = await classify(noise, noise);
+  assert.notEqual(code, 0);
+  assert.match(stdout, /^UNCLASSIFIABLE/);
+});
+
+test("the train repeating an already-known violation more times than the base is NOT inherited", async () => {
+  const line = "✗ docs/README.md: provider count 360 ≠ 361\n";
+  const { code, stdout } = await classify(line + line, line);
+  assert.notEqual(code, 0);
+  assert.match(stdout, /^NEW/);
 });
