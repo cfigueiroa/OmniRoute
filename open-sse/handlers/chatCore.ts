@@ -13,6 +13,7 @@ import {
 } from "./chatCore/openAICompatibleTools.ts";
 import {
   buildFailureUsageRecord,
+  readCpaAuthIndex,
   projectFailureUsageErrorCode,
   type FailureUsageAggregate,
 } from "./chatCore/failureUsage.ts";
@@ -682,6 +683,7 @@ export async function handleChatCore({
     payload?: unknown,
     maxDepth = 3
   ): EffectiveServiceTier | null => resolveReportedServiceTierFor(provider, payload, maxDepth);
+  let providerResponse;
   // Failure usage record building extracted to chatCore/failureUsage.ts (#3501); the handler keeps
   // the fire-and-forget save + computes latencyMs, so the call sites stay byte-identical.
   const persistFailureUsage = (
@@ -702,6 +704,7 @@ export async function handleChatCore({
         errorCode,
         latencyMs: Date.now() - startTime,
         endpoint: endpointPath,
+        cpaAuthIndex: readCpaAuthIndex(providerResponse),
         aggregate: aggregate ?? undefined,
       })
     ).catch(() => {});
@@ -3659,7 +3662,6 @@ export async function handleChatCore({
   }
 
   // Execute request using executor (handles URL building, headers, fallback, transform)
-  let providerResponse;
   let providerUrl;
   let providerHeaders;
   let finalBody;
@@ -5392,7 +5394,7 @@ export async function handleChatCore({
         effectiveServiceTier,
         isCombo,
         comboStrategy,
-        endpoint: endpointPath,
+        endpoint: endpointPath, cpaAuthIndex: readCpaAuthIndex(providerResponse),
       });
 
       // #12150 P1b surface 3 (fix round 1): a video-bridge-observed request's
@@ -6090,7 +6092,7 @@ export async function handleChatCore({
       effectiveServiceTier,
       isCombo,
       comboStrategy,
-      endpoint: endpointPath,
+      endpoint: endpointPath, cpaAuthIndex: readCpaAuthIndex(providerResponse),
     });
 
     // Routing event (feedback foundation) — fire-and-forget, cheap, never blocks
