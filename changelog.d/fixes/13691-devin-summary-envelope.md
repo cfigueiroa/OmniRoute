@@ -1,1 +1,1 @@
-- fix(providers): devin-cli-agentic no longer forwards a bare `<summary>` envelope as the final answer for SWE-2 models; add missing swe-2 catalog entries (#13691)
+- fix(providers): devin-cli-agentic no longer forwards a bare `<summary>` envelope as the final answer (SWE-2 models emit it heavily) (#13691)

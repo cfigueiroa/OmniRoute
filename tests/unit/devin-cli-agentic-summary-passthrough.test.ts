@@ -19,7 +19,6 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { DevinCliAgenticExecutor } from "../../open-sse/executors/devin-cli-agentic.ts";
-import { DEVIN_MODEL_CATALOG } from "../../open-sse/config/providers/registry/devin/catalog.ts";
 import { extractBareSummaryEnvelope } from "../../open-sse/executors/devin-agentic/toolParser.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -95,11 +94,4 @@ test("extractBareSummaryEnvelope only matches a whole-string <summary> wrapper (
     extractBareSummaryEnvelope("<summary>partial</summary>\nSome trailing narrative."),
     null
   );
-});
-
-test("swe-2 model family is present in the Devin catalog (#13691)", () => {
-  const ids = DEVIN_MODEL_CATALOG.map((entry) => entry.id);
-  for (const id of ["swe-2", "swe-2-medium", "swe-2-high", "swe-2-max"]) {
-    assert.ok(ids.includes(id), `expected ${id} to be in DEVIN_MODEL_CATALOG`);
-  }
 });
