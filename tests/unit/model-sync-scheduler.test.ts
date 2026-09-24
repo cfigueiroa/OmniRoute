@@ -411,6 +411,10 @@ test("#13973: phase offset delays the first periodic tick but never changes the 
   try {
     const scheduler = await loadScheduler("phase-offset-period");
     scheduler.startModelSyncScheduler("http://127.0.0.1:7777");
+    // Let the fire-and-forget codex revalidation import settle while the timer
+    // stubs are still installed, so its setTimeout(0) is captured here instead
+    // of arming a real loopback poll that leaks fetches into later tests.
+    await flushMicrotasks();
 
     // No recurring timer exists at boot: arming it at boot is what made it
     // collide with cleanup.ts's boot-anchored 6h interval.
@@ -431,6 +435,7 @@ test("#13973: phase offset delays the first periodic tick but never changes the 
     timers.timeouts.length = 0;
     timers.intervals.length = 0;
     scheduler.startModelSyncScheduler("http://127.0.0.1:7777");
+    await flushMicrotasks();
     const pending = timers.timeouts.find((t) => t.ms === scheduler.MODEL_SYNC_STAGGER_OFFSET_MS);
     scheduler.stopModelSyncScheduler();
     assert.equal(pending.cleared, true);
