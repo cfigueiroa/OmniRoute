@@ -1702,7 +1702,7 @@
     }
   },
   "deepseek": {
-    "format": "openai",
+    "format": "openai-responses",
     "headers": {
       "apiKey": {
         "Accept": "text/event-stream",
@@ -1720,8 +1720,8 @@
       }
     },
     "url": {
-      "nonStream": "https://api.deepseek.com/chat/completions",
-      "stream": "https://api.deepseek.com/chat/completions"
+      "nonStream": "https://api.deepseek.com/responses",
+      "stream": "https://api.deepseek.com/responses"
     }
   },
   "deepseek-web": {
