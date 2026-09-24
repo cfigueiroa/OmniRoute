@@ -67,7 +67,6 @@ test("image catalog GET uses the unified active-credential model list", async ()
 
   assert.deepEqual(
     ids.filter((id) => id.startsWith("codex/")),
-    // #14216: image rows carry their own catalog ids (parseImageModel maps them back).
     ["codex/gpt-5.6-sol-image", "codex/gpt-5.6-terra-image", "codex/gpt-5.6-luna-image"]
   );
   assert.ok(!ids.includes("openai/gpt-image-2"));
