@@ -479,7 +479,10 @@ async function* parseClaudeWebEvents(
         return;
       }
       if (next.done) break;
-
+      // `IteratorResult<string, void>`'s `value` widens to `string | void` here (the
+      // `TReturn = void` arm), even though `next.done` being falsy already rules that arm
+      // out at runtime — narrow it explicitly rather than casting.
+      if (typeof next.value !== "string") break;
       const data = next.value;
       if (data === "[DONE]") {
         protocolFailure(state, "DONE arrived before message_stop");
