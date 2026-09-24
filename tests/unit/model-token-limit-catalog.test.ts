@@ -133,14 +133,16 @@ test("v1 model catalog projects a synced Codex context to both public aliases", 
     );
   }
 
-  const canonical = await getModel("codex/gpt-5.6-sol");
-  assert.equal(canonical?.type, "image");
-  assert.deepEqual(canonical?.output_modalities, ["image"]);
-  assert.ok(Array.isArray(canonical?.supported_sizes));
+  // #14216: the image row has its own catalog id, so it no longer shadows the chat row
+  // under `codex/gpt-5.6-sol`. The specialty-row invariants are asserted on that id.
+  const imageRow = await getModel("codex/gpt-5.6-sol-image");
+  assert.equal(imageRow?.type, "image");
+  assert.deepEqual(imageRow?.output_modalities, ["image"]);
+  assert.ok(Array.isArray(imageRow?.supported_sizes));
 
   assert.equal(contextOverrides.removeModelContextOverride("codex", "gpt-5.6-sol"), true);
   assert.equal(
-    (await getModel("codex/gpt-5.6-sol"))?.context_length,
+    (await getModel("codex/gpt-5.6-sol-image"))?.context_length,
     undefined,
     "the specialty row must not inherit the synced chat context after override removal"
   );

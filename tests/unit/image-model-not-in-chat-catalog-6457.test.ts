@@ -129,8 +129,12 @@ test("registered image model with explicit chat endpoints keeps both catalog ent
     ),
     "explicit responses support must keep the synced chat entry"
   );
+  // #14216 gave the image entry its own catalog id (`gpt-5.6-sol-image`) so /v1/models no
+  // longer lists one id twice with two types; parseImageModel() maps both that id and the
+  // bare one back to `gpt-5.6-sol`, so callers of either keep working. What #6457 protects
+  // is that neither entry is dropped — assert both exist, each under its own id.
   assert.ok(
-    entries.some((model) => model.type === "image"),
-    "the registered image entry must remain available under the same model id"
+    body.data.some((model) => model.id.endsWith("/gpt-5.6-sol-image") && model.type === "image"),
+    "the registered image entry must remain available under its catalog id"
   );
 });

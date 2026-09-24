@@ -794,11 +794,13 @@ test("chatCore carries Chat reasoning_content into official DeepSeek Responses i
     provider: "deepseek",
     model: "deepseek-v4-pro",
     endpoint: "/v1/chat/completions",
-    // #14316 made DeepSeek default to Chat Completions (the Responses protocol demands
-    // the caller echo reasoning_text on every turn, which broke multi-turn tool calls).
-    // The Responses path is still offered per-connection, so this test selects it the way
-    // an operator does - apiType: "responses" - instead of relying on the old default.
-    credentials: { apiKey: "sk-deepseek", providerSpecificData: { apiType: "responses" } },
+    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
+    // connection through the registry alternate format. `apiType` only drives the
+    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
+    credentials: {
+      apiKey: "sk-deepseek",
+      providerSpecificData: { targetFormat: "openai-responses" },
+    },
     body: {
       model: "deepseek-v4-pro",
       stream: false,
@@ -848,11 +850,13 @@ test("chatCore replays nonstream DeepSeek Responses reasoning across a Chat tool
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    // #14316 made DeepSeek default to Chat Completions (the Responses protocol demands
-    // the caller echo reasoning_text on every turn, which broke multi-turn tool calls).
-    // The Responses path is still offered per-connection, so this test selects it the way
-    // an operator does - apiType: "responses" - instead of relying on the old default.
-    credentials: { apiKey: "sk-deepseek", providerSpecificData: { apiType: "responses" } },
+    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
+    // connection through the registry alternate format. `apiType` only drives the
+    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
+    credentials: {
+      apiKey: "sk-deepseek",
+      providerSpecificData: { targetFormat: "openai-responses" },
+    },
     body: {
       model: "deepseek-v4-flash",
       stream: false,
@@ -881,6 +885,10 @@ test("chatCore replays nonstream DeepSeek Responses reasoning across a Chat tool
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
+    credentials: {
+      apiKey: "sk-deepseek",
+      providerSpecificData: { targetFormat: "openai-responses" },
+    },
     body: {
       model: "deepseek-v4-flash",
       stream: false,
@@ -910,11 +918,13 @@ test("chatCore replays streamed DeepSeek Responses reasoning across a Chat tool 
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    // #14316 made DeepSeek default to Chat Completions (the Responses protocol demands
-    // the caller echo reasoning_text on every turn, which broke multi-turn tool calls).
-    // The Responses path is still offered per-connection, so this test selects it the way
-    // an operator does - apiType: "responses" - instead of relying on the old default.
-    credentials: { apiKey: "sk-deepseek", providerSpecificData: { apiType: "responses" } },
+    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
+    // connection through the registry alternate format. `apiType` only drives the
+    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
+    credentials: {
+      apiKey: "sk-deepseek",
+      providerSpecificData: { targetFormat: "openai-responses" },
+    },
     body: {
       model: "deepseek-v4-flash",
       stream: true,
@@ -940,6 +950,10 @@ test("chatCore replays streamed DeepSeek Responses reasoning across a Chat tool 
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
+    credentials: {
+      apiKey: "sk-deepseek",
+      providerSpecificData: { targetFormat: "openai-responses" },
+    },
     body: {
       model: "deepseek-v4-flash",
       stream: false,

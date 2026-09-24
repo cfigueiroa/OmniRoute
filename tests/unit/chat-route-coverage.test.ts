@@ -200,7 +200,12 @@ test("handleChat rejects requests without a model", async () => {
 });
 
 test("handleChat applies task-aware routing when a semantic override is enabled", async () => {
-  await seedConnection("deepseek", { apiKey: "sk-deepseek-task-route" });
+  // #14316 moved DeepSeek to Chat Completions by default; these cases assert a Responses-shaped
+  // upstream body, so the connection selects the registry alternate the way an operator does.
+  await seedConnection("deepseek", {
+    apiKey: "sk-deepseek-task-route",
+    providerSpecificData: { targetFormat: "openai-responses" },
+  });
   const seenAuthHeaders = [];
   const seenRequestBodies = [];
   setTaskRoutingConfig({
@@ -317,7 +322,12 @@ test("handleChat keeps protected combo fallback separate from Global Fallback Mo
 });
 
 test("handleChat defaults a Combo's incompatible reasoning fallback to drop", async () => {
-  await seedConnection("deepseek", { apiKey: "sk-deepseek-reasoning-drop" });
+  // #14316 moved DeepSeek to Chat Completions by default; these cases assert a Responses-shaped
+  // upstream body, so the connection selects the registry alternate the way an operator does.
+  await seedConnection("deepseek", {
+    apiKey: "sk-deepseek-reasoning-drop",
+    providerSpecificData: { targetFormat: "openai-responses" },
+  });
   await combosDb.createCombo({
     name: "reasoning-transport-drop",
     strategy: "priority",
