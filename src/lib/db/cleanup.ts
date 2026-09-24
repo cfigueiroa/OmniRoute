@@ -584,7 +584,7 @@ export async function cleanupExpiredFiles(): Promise<CleanupResult> {
  * Deleting an old node only affects reconnect anchors: a conversation resumed
  * after the window mints a new id, which is already the documented
  * anchor-miss behavior of resolveConversationId. `last_seen_at` is indexed
- * (migration 185, #13973 — migration 156 originally missed it). Bounded
+ * (migration 186, #13973 — migration 156 originally missed it). Bounded
  * batches yield between writes so an existing large table cannot park the
  * event loop for the whole cleanup pass.
  */
