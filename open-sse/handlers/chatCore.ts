@@ -95,6 +95,7 @@ import {
   shouldUseNativeOpenAICompatibleResponsesPassthrough,
   stampNativeResponsesPassthroughBody,
   redactPassthroughThinkingSignatures,
+  stripClaudeRejectedTopLevelFields,
   isClaudeCodeSemanticPassthroughRequest,
 } from "./chatCore/passthroughHelpers.ts";
 import { recoverAnthropicThinkingSignature } from "./chatCore/thinkingSignatureRecovery.ts";
@@ -242,6 +243,8 @@ import {
   isStreamRecoveryExplicitlyConfigured,
 } from "@/lib/resilience/settings";
 import { classifyProviderError, PROVIDER_ERROR_TYPES } from "../services/errorClassifier.ts";
+import { isOpencodeFreeTierRefusalForProvider } from "../executors/opencodeGeoBlock.ts";
+import { noteOpencodeFreeTierSkip } from "../services/opencodeFreeTierSkip.ts";
 import { updateProviderConnection, getProviderConnectionById } from "@/lib/db/providers";
 import { wasRefreshTokenRotated } from "@omniroute/open-sse/services/refreshSerializer.ts";
 import { connectionHasExtraKeys } from "../services/apiKeyRotator.ts";
@@ -507,6 +510,7 @@ export async function handleChatCore({
   // the model-bound `body` itself is never touched.
   videoBridgeLog = undefined,
   fallbackAttempts = undefined,
+  forcedConnectionId = null, // #14116: caller's pinned/requested connection, vs credentials.connectionId below
 }) {
   const {
     model: originModel,
@@ -1666,6 +1670,7 @@ export async function handleChatCore({
         }
       }
       // Phase 4A: unified output styles (supersedes cavemanOutputMode via the back-compat shim).
+      // The Auto-Clarity toggle is read from cavemanOutputMode.autoClarity.
       let outputStyleResult:
         import("../services/compression/outputStyles/apply.ts").OutputStylesResult | null = null;
       if (config.enabled && compressionHeader?.trim().toLowerCase() !== "off") {
@@ -1683,7 +1688,8 @@ export async function handleChatCore({
             outputStyleResult = applyOutputStyles(
               body as Parameters<typeof applyOutputStyles>[0],
               selection,
-              outputStyleLanguage
+              outputStyleLanguage,
+              { autoClarity: config.cavemanOutputMode?.autoClarity }
             );
             if (outputStyleResult.applied) {
               body = outputStyleResult.body as typeof body;
@@ -2445,11 +2451,7 @@ export async function handleChatCore({
           DEFAULT_THINKING_CLAUDE_SIGNATURE
         ) as typeof translatedBody.messages;
 
-        // Anthropic API rejects requests with both temperature and top_p.
-        // VS Code Claude extension and similar clients send both; strip top_p.
-        if (translatedBody.temperature !== undefined && translatedBody.top_p !== undefined) {
-          delete translatedBody.top_p;
-        }
+        stripClaudeRejectedTopLevelFields(translatedBody, clientRawRequest?.headers);
       }
 
       // Legacy models reject role:"system" messages. Supported models accept
@@ -3424,7 +3426,7 @@ export async function handleChatCore({
 
                   // Mid-stream continuation (Fase 4.4): re-request with the partial text as an
                   // assistant prefill. Gated by its own setting and only for OpenAI-compatible
-                  // bodies (makeContinuationBody returns null otherwise).
+                  // request bodies, chat or Responses (makeContinuationBody returns null otherwise).
                   const continueStream = continueMidStreamEnabled
                     ? (assistantSoFar: string) => {
                         const continuationBody = makeContinuationBody(
@@ -4011,6 +4013,14 @@ export async function handleChatCore({
           console.warn(
             `[provider] Node ${errorConnectionId} project routing error (${statusCode}) -- not banning`
           );
+          // #14313: free-tier refusal on the keyless path — record a short TTL
+          // skip so auto-combo / noauth fallback stop re-picking it immediately.
+          if (
+            errorConnectionId === "noauth" &&
+            isOpencodeFreeTierRefusalForProvider(provider, statusCode, message)
+          ) {
+            noteOpencodeFreeTierSkip(provider);
+          }
         } else if (errorType === PROVIDER_ERROR_TYPES.GEO_BLOCKED) {
           // Google regional refusal: account-independent, non-terminal; park the connection
           // until egress uses a supported region; probes skip the day-long cooldown (#9817).
@@ -5947,6 +5957,9 @@ export async function handleChatCore({
     compressionResponseMeta,
     comboStrategy,
     fallbackAttempts,
+    isCombo, // #14116: foreign-account quota-header strip (only meaningful when true)
+    requestedConnectionId: forcedConnectionId || null,
+    selectedConnectionId: credentials?.connectionId ?? null,
   });
 
   // The streaming headers (turn-state included, when present) are committed to
