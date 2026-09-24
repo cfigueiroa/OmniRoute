@@ -443,6 +443,39 @@ function updateToolFinishArmed(
   return armed;
 }
 
+type NextFrameOutcome = { kind: "data"; value: string } | { kind: "idle-finish" } | { kind: "eof" };
+
+/**
+ * Pulls the next upstream SSE frame, racing it against the idle-finish timer only while one
+ * is armed. On an idle timeout it also cancels the now-useless upstream reader directly (see
+ * `parseClaudeWebEvents`'s own `finally` for why: a generator-close alone can hang forever
+ * against a reader that never resolves).
+ */
+async function readNextFrame(
+  control: StreamControl,
+  sseIterator: AsyncIterator<string, void, void>,
+  toolFinishArmed: boolean,
+  toolUseIdleFinishMs: number
+): Promise<NextFrameOutcome> {
+  const next = toolFinishArmed
+    ? await raceNextFrame(sseIterator, toolUseIdleFinishMs)
+    : await sseIterator.next();
+
+  if (next === IDLE_TIMEOUT) {
+    // The upstream connection is still open with no `message_stop` coming (claude.ai's
+    // tool_use hold-open, #14711) — cancel it directly so decodeSseData's pending
+    // `reader.read()` settles promptly instead of leaving the generator blocked on a read
+    // that would otherwise never resolve.
+    if (control.reader) await control.reader.cancel().catch(() => {});
+    return { kind: "idle-finish" };
+  }
+  // `IteratorResult<string, void>`'s `value` widens to `string | void` (the `TReturn = void`
+  // arm), even though `next.done` being falsy already rules that arm out at runtime — narrow
+  // it explicitly rather than casting.
+  if (next.done || typeof next.value !== "string") return { kind: "eof" };
+  return { kind: "data", value: next.value };
+}
+
 async function* parseClaudeWebEvents(
   source: ReadableStream<Uint8Array>,
   control: StreamControl,
@@ -464,26 +497,15 @@ async function* parseClaudeWebEvents(
 
   try {
     while (true) {
-      const next = toolFinishArmed
-        ? await raceNextFrame(sseIterator, toolUseIdleFinishMs)
-        : await sseIterator.next();
-
-      if (next === IDLE_TIMEOUT) {
+      const frame = await readNextFrame(control, sseIterator, toolFinishArmed, toolUseIdleFinishMs);
+      if (frame.kind === "idle-finish") {
         state.phase = "stopped";
-        // The upstream connection is still open with no `message_stop` coming (claude.ai's
-        // tool_use hold-open, #14711) — cancel it directly so decodeSseData's pending
-        // `reader.read()` settles promptly instead of leaving the generator (and this one's
-        // own cleanup below) blocked on a read that would otherwise never resolve.
-        if (control.reader) await control.reader.cancel().catch(() => {});
         yield { kind: "finish", stopReason: "tool_use" };
         return;
       }
-      if (next.done) break;
-      // `IteratorResult<string, void>`'s `value` widens to `string | void` here (the
-      // `TReturn = void` arm), even though `next.done` being falsy already rules that arm
-      // out at runtime — narrow it explicitly rather than casting.
-      if (typeof next.value !== "string") break;
-      const data = next.value;
+      if (frame.kind === "eof") break;
+
+      const data = frame.value;
       if (data === "[DONE]") {
         protocolFailure(state, "DONE arrived before message_stop");
       }
