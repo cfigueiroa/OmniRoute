@@ -1265,7 +1265,7 @@ Số liệu chuẩn vào 2026-08-24: **1.029 video duy nhất** · **11.132.922 
   <tr><td nowrap><b>Môi trường chạy</b></td><td>Node.js 22.x / 24.x LTS — <code>&gt;=22.22.2 &lt;23 || &gt;=24.0.0 &lt;27</code></td></tr>
   <tr><td nowrap><b>Ngôn ngữ</b></td><td>TypeScript 6.0 — <b>100% TypeScript</b> trên <code>src/</code> và <code>open-sse/</code> (không có <code>any</code> trong lõi kể từ v2.0)</td></tr>
   <tr><td nowrap><b>Framework</b></td><td>Next.js 16 + React 19 + Tailwind CSS 4</td></tr>
-  <tr><td nowrap><b>Cơ sở dữ liệu</b></td><td>better-sqlite3 (SQLite, WAL journaling) + LowDB (JSON legacy) — 122 module miền, 182 migrations</td></tr>
+  <tr><td nowrap><b>Cơ sở dữ liệu</b></td><td>better-sqlite3 (SQLite, WAL journaling) + LowDB (JSON legacy) — 122 module miền, 183 migrations</td></tr>
   <tr><td nowrap><b>Bộ nhớ</b></td><td>SQLite FTS5 full-text + nhúng vector lượng tử hóa int8, phân rã có kiểu</td></tr>
   <tr><td nowrap><b>Lược đồ</b></td><td>Zod 4 — Xác thực I/O công cụ MCP + hợp đồng API</td></tr>
   <tr><td nowrap><b>Giao thức</b></td><td>MCP (stdio / HTTP / SSE) + A2A v0.3 (JSON-RPC 2.0 + SSE)</td></tr>
