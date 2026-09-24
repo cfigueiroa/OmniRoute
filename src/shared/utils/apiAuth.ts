@@ -96,24 +96,12 @@ function isRequireLoginBootstrapWritePath(pathname: string | null, method: strin
 }
 
 /**
- * #14296: the general settings PATCH is the second bootstrap write the
- * onboarding wizard fires (`{ setupComplete: true }`, after require-login).
- * Reachable by the one-shot bootstrap token ONLY — this branch of
- * isAuthRequired() is itself only entered while zero credentials exist
- * anywhere (see the guard above its call site), so this can never widen
- * access once a password/OIDC/INITIAL_PASSWORD is configured.
- */
-function isSettingsBootstrapPatchPath(pathname: string | null, method: string): boolean {
-  return pathname === "/api/settings" && method.toUpperCase() === "PATCH";
-}
-
-/**
  * #14296: a non-loopback caller (typically a Docker/NAT-forwarded local
  * operator — see docs at the top of bootstrapToken.ts) may still complete
  * the fresh-install bootstrap window by presenting the one-shot token
  * printed to the process log. Never widens `isLoopbackRequest` itself —
- * this is an alternate proof checked only for the two bootstrap-write paths
- * above, and only a non-mutating peek (the route handler consumes/
+ * this is an alternate proof checked only for the require-login bootstrap
+ * write above, and only a non-mutating peek (the route handler consumes/
  * invalidates the token once the write actually succeeds).
  */
 function hasBootstrapToken(request: RequestLike | Request | null | undefined): boolean {
@@ -122,8 +110,8 @@ function hasBootstrapToken(request: RequestLike | Request | null | undefined): b
 }
 
 /**
- * #14296: resolves whether one of the two onboarding bootstrap writes
- * (require-login POST, settings PATCH) should stay open for this request.
+ * #14296: resolves whether the onboarding bootstrap write (require-login
+ * POST) should stay open for this request.
  * Extracted out of isAuthRequired() to keep that function's branching flat —
  * this helper owns the loopback-or-token decision on its own.
  *
@@ -494,11 +482,12 @@ export async function isAuthRequired(
       // 127.0.0.1. Owner decision: never reclassify that peer as loopback
       // (it is indistinguishable from any other client of the published
       // port); instead accept the one-shot bootstrap token printed to the
-      // process log as an alternate proof for these two writes only.
-      if (
-        isRequireLoginBootstrapWritePath(pathname, method) ||
-        isSettingsBootstrapPatchPath(pathname, method)
-      ) {
+      // process log as an alternate proof for this write only. The general
+      // `PATCH /api/settings` is deliberately NOT token-reachable: it accepts
+      // any settings key, and the wizard never needs it — the skip-password
+      // path writes requireLogin=false first (auth then off install-wide by
+      // design, #574) and the password path logs in and carries a session.
+      if (isRequireLoginBootstrapWritePath(pathname, method)) {
         return !isBootstrapWriteExempt(request, loopback);
       }
 

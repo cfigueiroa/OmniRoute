@@ -15,10 +15,12 @@
  * mints a random, single-use token, prints it to the process/container log
  * (stdout — reachable only to whoever can already read the container's logs,
  * i.e. the operator), and accepts it as an alternate proof of "this is the
- * local operator" for exactly the two onboarding bootstrap writes
- * (`POST /api/settings/require-login`, `PATCH /api/settings` while still in
- * the bootstrap window). The token is invalidated the first time it is
- * successfully consumed.
+ * local operator" for exactly one onboarding bootstrap write
+ * (`POST /api/settings/require-login`). The general `PATCH /api/settings` is
+ * NOT token-reachable — once requireLogin=false is written (or the operator
+ * logs in with the new password) the wizard's setupComplete PATCH passes on
+ * its own. The token is invalidated the first time it is successfully
+ * consumed.
  *
  * This module is a pure in-memory, per-process singleton — the token cannot
  * outlive the process, and a restart mints a fresh one, matching the

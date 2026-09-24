@@ -9,9 +9,10 @@ import path from "node:path";
 // Docker/NAT-forwarded local operator — see docker-bootstrap-loopback-14296
 // for why that peer must never be reclassified as loopback), gets a one-shot
 // bootstrap token printed to the process log. The two onboarding bootstrap
-// writes (`POST /api/settings/require-login`, `PATCH /api/settings`) accept
-// that token as an alternate proof of being the local operator, and it is
-// invalidated the first time it is successfully consumed.
+// write (`POST /api/settings/require-login`) accepts that token as an
+// alternate proof of being the local operator, and it is invalidated the
+// first time it is successfully consumed. The general `PATCH /api/settings`
+// is deliberately NOT token-reachable (see the rework cases below).
 
 const TEST_DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "omniroute-docker-token-"));
 process.env.DATA_DIR = TEST_DATA_DIR;
@@ -95,7 +96,7 @@ test("#14296: a non-loopback caller with NO token is still auth-required (and a 
   assert.equal(bootstrapToken.peekBootstrapToken("definitely-wrong"), false);
 });
 
-test("#14296: the CORRECT one-shot token lets a non-loopback caller through, on both bootstrap-write paths", async () => {
+test("#14296: the CORRECT one-shot token lets a non-loopback caller through the require-login POST", async () => {
   await updateSettings({ requireLogin: true, password: "" });
 
   // Mint deterministically for the test instead of relying on the lazy mint's
@@ -107,10 +108,51 @@ test("#14296: the CORRECT one-shot token lets a non-loopback caller through, on 
     false,
     "a valid bootstrap token must satisfy the require-login POST gate for a non-loopback peer"
   );
+});
+
+// Rework (merge-batch 2026-09-23): the token is scoped to the require-login
+// POST only. The general settings PATCH accepts ANY settings key, and the
+// wizard never needs a bootstrap exemption for it: the skip-password path
+// writes requireLogin=false first (after which auth is off install-wide by
+// design, #574), and the password path logs in and carries a session.
+test("#14296 rework: the bootstrap token does NOT open the general settings PATCH", async () => {
+  await updateSettings({ requireLogin: true, password: "" });
+  const token = bootstrapToken.getOrCreateBootstrapToken({ log: () => {} });
+
   assert.equal(
     await apiAuth.isAuthRequired(settingsPatchRequest(DOCKER_GATEWAY_PEER, token)),
+    true,
+    "a bootstrap token must not authorize arbitrary settings writes from a non-loopback peer"
+  );
+});
+
+test("#14296 rework: a keyless loopback install that already completed onboarding keeps the settings PATCH auth-required", async () => {
+  await updateSettings({ requireLogin: true, password: "", setupComplete: true });
+
+  assert.equal(
+    await apiAuth.isAuthRequired(settingsPatchRequest("127.0.0.1")),
+    true,
+    "the bootstrap-write exemption must not widen the post-onboarding settings PATCH for loopback"
+  );
+});
+
+test("#14296 rework: the wizard's skip-password flow still completes — token on require-login, then the PATCH is open", async () => {
+  await updateSettings({ requireLogin: true, password: "" });
+  const token = bootstrapToken.getOrCreateBootstrapToken({ log: () => {} });
+
+  assert.equal(
+    await apiAuth.isAuthRequired(requireLoginPostRequest(DOCKER_GATEWAY_PEER, token)),
+    false
+  );
+  // What POST /api/settings/require-login { requireLogin: false } persists,
+  // followed by the route consuming the one-shot token.
+  await updateSettings({ requireLogin: false });
+  assert.equal(bootstrapToken.consumeBootstrapToken(token), true);
+
+  assert.equal(
+    await apiAuth.isAuthRequired(settingsPatchRequest(DOCKER_GATEWAY_PEER)),
     false,
-    "a valid bootstrap token must satisfy the settings PATCH gate for a non-loopback peer"
+    "after requireLogin=false the setupComplete PATCH needs no token"
   );
 });
 
