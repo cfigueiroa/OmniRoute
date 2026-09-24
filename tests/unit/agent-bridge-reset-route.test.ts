@@ -30,6 +30,7 @@ const core = await import("../../src/lib/db/core.ts");
 const stateDb = await import("../../src/lib/db/agentBridgeState.ts");
 const mappingsDb = await import("../../src/lib/db/agentBridgeMappings.ts");
 const resetRoute = await import("../../src/app/api/tools/agent-bridge/agents/[id]/reset/route.ts");
+const { checkDNSEntryForAgent } = await import("../../src/mitm/dns/dnsConfig.ts");
 
 function resetStorage() {
   core.resetDbInstance();
@@ -98,7 +99,9 @@ test("POST .../[id]/reset: clears mappings, resets dns_enabled/setup_completed f
     dns_enabled: true,
     setup_completed: true,
   });
-  mappingsDb.setMappings("antigravity", [{ source: "gemini-pro", target: "anthropic/claude-sonnet-4" }]);
+  mappingsDb.setMappings("antigravity", [
+    { source: "gemini-pro", target: "anthropic/claude-sonnet-4" },
+  ]);
 
   // A second, unrelated agent must be left untouched by resetting antigravity.
   stateDb.upsertAgentBridgeState({ agent_id: "cursor", dns_enabled: true, setup_completed: true });
@@ -123,9 +126,11 @@ test("POST .../[id]/reset: clears mappings, resets dns_enabled/setup_completed f
   assert.equal(body.dns_enabled, false);
   assert.equal(body.mappingsCleared, true);
   assert.equal(body.restartRequired, true);
-  // Nothing ever spoofed /etc/hosts in this test (OMNIROUTE_SKIP_DNS_WRITE), so
-  // the agent's hosts were never present to begin with — un-spoofing verifies true.
-  assert.equal(body.verified, true);
+  // OMNIROUTE_SKIP_DNS_WRITE keeps the route from touching /etc/hosts, but `verified`
+  // still reads the machine's real hosts file. A box that already carries the agent's
+  // spoof entries (e.g. a CI host where the MITM once ran) legitimately reports false,
+  // so assert the route's wiring against the same probe instead of a fixed value.
+  assert.equal(body.verified, !checkDNSEntryForAgent("antigravity"));
   // cursor is still dns_enabled=true -> reset must report other agents remain active.
   assert.equal(body.otherAgentsStillActive, true);
 
