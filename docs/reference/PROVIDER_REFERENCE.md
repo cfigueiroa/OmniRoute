@@ -10,7 +10,7 @@ lastUpdated: 2026-09-24
 > Regenerate with: `npm run gen:provider-reference`
 > **Last generated:** 2026-09-24
 
-Total providers: **359**. See category breakdown below.
+Total providers: **358**. See category breakdown below.
 
 ## Categories
 
@@ -117,7 +117,7 @@ Use the dashboard at `/dashboard/providers` to enable, configure, and test each 
 | `zai-web` | `zw` | Z.ai Web | Web cookie | [link](https://chat.z.ai) | Copy the "token" value from chat.z.ai → DevTools → Application → Local Storage. Do not copy cookies; OmniRoute handles the per-request CAPTCHA through its browser transport. | — |
 | `zenmux-free` | `zmf` | ZenMux Free (Web) | Web cookie | [link](https://zenmux.ai) | Login at zenmux.ai, then export all cookies using EditThisCookie or Cookie-Editor and paste the full Cookie header string here. Refresh every ~30 days. | — |
 
-## API Key Providers (paid / paid-with-free-credits) (242)
+## API Key Providers (paid / paid-with-free-credits) (241)
 
 | ID | Alias | Name | Tags | Website | Notes |
 |----|-------|------|------|---------|-------|
@@ -322,7 +322,6 @@ Use the dashboard at `/dashboard/providers` to enable, configure, and test each 
 | `stability-ai` | `stability` | Stability AI | API key, image | [link](https://stability.ai) | — |
 | `stepfun` | `stepfun` | StepFun | API key | [link](https://stepfun.com) | Get API key at platform.stepfun.com |
 | `sumopod` | `sumopod` | SumoPod | API key | [link](https://ai.sumopod.com) | Use your SumoPod API key (sk-...) in Authorization: Bearer <key>. Fully OpenAI-compatible. API base URL: https://ai.sumopod.com/v1. |
-| `suno` | `suno` | Suno | API key | [link](https://suno.ai) | Paste session cookie from suno.ai (Clerk auth) |
 | `synthetic` | `synthetic` | Synthetic | API key, aggregator | [link](https://synthetic.new) | — |
 | `tabitoken` | `tabitoken` | TabiToken | API key, aggregator | [link](https://tabitoken.com) | — |
 | `tencent` | `tencent` | Tencent Hunyuan | API key | [link](https://hunyuan.tencent.com) | Get API key at console.cloud.tencent.com |
