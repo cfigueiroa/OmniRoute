@@ -1082,6 +1082,8 @@ export async function safeLogEvents({
   comboName,
   clientRawRequest,
   tlsFingerprintUsed = false,
+  rotationAccount = null,
+  correlationId = null,
 }) {
   // Feed the provider's real answer back to proxy selection (never result.status: some 429s
   // are generated locally; proxyInfo carries the status captured around fetch). Must stay
@@ -1135,6 +1137,8 @@ export async function safeLogEvents({
       connectionId: credentials.connectionId,
       comboId: comboName || null,
       account: credentials.connectionId?.slice(0, 8) || null,
+      rotationAccount: rotationAccount || null,
+      correlationId: correlationId || null,
       tlsFingerprint: tlsFingerprintUsed,
       upstreamStatus: proxyInfo?.upstreamStatus ?? null,
     });
