@@ -678,8 +678,7 @@ test("recordProviderFailure honors runtime provider breaker profile", () => {
 
     recordProviderFailure(provider, undefined, "conn-runtime-profile", runtimeProfile);
 
-    // #14530 scoped a per-connection failure to that connection's breaker; the runtime
-    // profile must be applied there, not to the provider-wide one.
+    // #14530: a per-connection failure configures that connection's breaker.
     const breakerName = connectionCircuitBreakerName(provider, "conn-runtime-profile");
     const breaker = getCircuitBreaker(breakerName);
     assert.equal(breaker.failureThreshold, runtimeProfile.failureThreshold);
@@ -704,8 +703,7 @@ test("recordProviderFailure preserves provider breaker cooldown while open", () 
     const profile = { failureThreshold: 1, resetTimeoutMs: 60_000 };
     clearProviderFailure(provider);
 
-    // The provider-wide breaker is now reached only by failures that hit every account the
-    // same way (network/proxy, #14530), so drive it through that path.
+    // #14530: only network/proxy failures reach the provider-wide breaker now.
     recordProviderFailure(provider, undefined, "conn-open-cooldown", profile, {
       isNetworkError: true,
     });

@@ -789,18 +789,19 @@ test("chatCore preserves Combo skip behavior for incompatible reasoning", async 
   assert.equal(skipped.calls.length, 0);
 });
 
+// #14316 moved DeepSeek to Chat Completions by default; these cases pin the Responses alternate,
+// which a connection selects by targetFormat (apiType only drives openai-compatible-*).
+const DEEPSEEK_RESPONSES_CREDENTIALS = {
+  apiKey: "sk-deepseek",
+  providerSpecificData: { targetFormat: "openai-responses" },
+};
+
 test("chatCore carries Chat reasoning_content into official DeepSeek Responses input", async () => {
   const { call, result } = await invokeChatCore({
     provider: "deepseek",
     model: "deepseek-v4-pro",
     endpoint: "/v1/chat/completions",
-    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
-    // connection through the registry alternate format. `apiType` only drives the
-    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
-    credentials: {
-      apiKey: "sk-deepseek",
-      providerSpecificData: { targetFormat: "openai-responses" },
-    },
+    credentials: DEEPSEEK_RESPONSES_CREDENTIALS,
     body: {
       model: "deepseek-v4-pro",
       stream: false,
@@ -850,13 +851,7 @@ test("chatCore replays nonstream DeepSeek Responses reasoning across a Chat tool
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
-    // connection through the registry alternate format. `apiType` only drives the
-    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
-    credentials: {
-      apiKey: "sk-deepseek",
-      providerSpecificData: { targetFormat: "openai-responses" },
-    },
+    credentials: DEEPSEEK_RESPONSES_CREDENTIALS,
     body: {
       model: "deepseek-v4-flash",
       stream: false,
@@ -885,10 +880,7 @@ test("chatCore replays nonstream DeepSeek Responses reasoning across a Chat tool
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    credentials: {
-      apiKey: "sk-deepseek",
-      providerSpecificData: { targetFormat: "openai-responses" },
-    },
+    credentials: DEEPSEEK_RESPONSES_CREDENTIALS,
     body: {
       model: "deepseek-v4-flash",
       stream: false,
@@ -918,13 +910,7 @@ test("chatCore replays streamed DeepSeek Responses reasoning across a Chat tool 
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    // #14316 moved DeepSeek to Chat Completions by default; Responses stays selectable per
-    // connection through the registry alternate format. `apiType` only drives the
-    // openai-compatible-* family, so the connection selects the alternate by targetFormat.
-    credentials: {
-      apiKey: "sk-deepseek",
-      providerSpecificData: { targetFormat: "openai-responses" },
-    },
+    credentials: DEEPSEEK_RESPONSES_CREDENTIALS,
     body: {
       model: "deepseek-v4-flash",
       stream: true,
@@ -950,10 +936,7 @@ test("chatCore replays streamed DeepSeek Responses reasoning across a Chat tool 
     provider: "deepseek",
     model: "deepseek-v4-flash",
     endpoint: "/v1/chat/completions",
-    credentials: {
-      apiKey: "sk-deepseek",
-      providerSpecificData: { targetFormat: "openai-responses" },
-    },
+    credentials: DEEPSEEK_RESPONSES_CREDENTIALS,
     body: {
       model: "deepseek-v4-flash",
       stream: false,
