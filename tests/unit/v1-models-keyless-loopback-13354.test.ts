@@ -98,3 +98,66 @@ test("#13354: keyless install with one API key created — anonymous loopback GE
 
   assert.equal(res.status, 401, `expected 401 once an API key exists, got ${res.status}`);
 });
+
+// Rework (merge-batch 2026-09-23): the keyless bypass must be scoped to a
+// TRUSTED loopback peer. A keyless install exposed on the network (public IP,
+// LAN, or a Docker bridge gateway — which is NOT loopback, see #14296) must keep
+// requiring a credential for the model catalog. These cases model the real
+// runtime: a stamping server is in front (OMNIROUTE_PEER_STAMP_TOKEN set) and the
+// authz pipeline hands the route handler its re-stamped locality verdict.
+const { AUTHZ_HEADER_PEER_LOCALITY } = await import("../../src/server/authz/headers.ts");
+
+async function withStampingServer<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = process.env.OMNIROUTE_PEER_STAMP_TOKEN;
+  process.env.OMNIROUTE_PEER_STAMP_TOKEN = "test-stamp-token-13354";
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env.OMNIROUTE_PEER_STAMP_TOKEN;
+    else process.env.OMNIROUTE_PEER_STAMP_TOKEN = previous;
+  }
+}
+
+function catalogRequestFrom(locality: "loopback" | "lan" | "remote", host: string): Request {
+  return new Request(`http://${host}:20128/v1/models`, {
+    headers: { [AUTHZ_HEADER_PEER_LOCALITY]: locality },
+  });
+}
+
+test("#13354 rework: keyless install reached from a PUBLIC IP — anonymous GET /v1/models must 401", async () => {
+  await settingsModule.updateSettings({ setupComplete: true });
+
+  const res = await withStampingServer(() =>
+    v1ModelsCatalog.getUnifiedModelsResponse(catalogRequestFrom("remote", "203.0.113.7"))
+  );
+
+  assert.equal(
+    res.status,
+    401,
+    `keyless bypass must not serve the catalog to a public peer, got ${res.status}`
+  );
+});
+
+test("#13354 rework: keyless install reached from the Docker gateway / LAN — anonymous GET /v1/models must 401", async () => {
+  await settingsModule.updateSettings({ setupComplete: true });
+
+  const res = await withStampingServer(() =>
+    v1ModelsCatalog.getUnifiedModelsResponse(catalogRequestFrom("lan", "172.17.0.1"))
+  );
+
+  assert.equal(
+    res.status,
+    401,
+    `a Docker-gateway/LAN peer is not loopback and must not get the keyless bypass, got ${res.status}`
+  );
+});
+
+test("#13354 rework: keyless install, trusted loopback peer behind the stamping server — GET /v1/models is 200", async () => {
+  await settingsModule.updateSettings({ setupComplete: true });
+
+  const res = await withStampingServer(() =>
+    v1ModelsCatalog.getUnifiedModelsResponse(catalogRequestFrom("loopback", "127.0.0.1"))
+  );
+
+  assert.equal(res.status, 200, `expected 200 for a trusted loopback peer, got ${res.status}`);
+});
