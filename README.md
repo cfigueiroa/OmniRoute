@@ -1,3 +1,5 @@
+> **Fork arquivado em 20/10/2026.** O trabalho continua em [shipsfromrio/OmniRoute](https://github.com/shipsfromrio/OmniRoute).
+
 <div align="center">
 
 <img src="./docs/screenshots/MainOmniRoute.png" alt="OmniRoute Dashboard" width="820"/>
